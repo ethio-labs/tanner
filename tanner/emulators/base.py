@@ -1,12 +1,12 @@
 import mimetypes
 import re
-from urllib.parse import unquote, parse_qsl, urlparse
+import urllib.parse
 import yarl
 
 from tanner import __version__ as tanner_version
 from tanner.config import TannerConfig
 from tanner.emulators import lfi, rfi, sqli, xss, cmd_exec, php_code_injection, php_object_injection, crlf, \
-    xxe_injection, template_injection, twig_template_injection  # noqa
+    xxe_injection, template_injection  # noqa
 from tanner.utils import patterns
 
 
@@ -22,8 +22,7 @@ class BaseHandler:
             'php_object_injection': TannerConfig.get('EMULATOR_ENABLED', 'php_object_injection'),
             'crlf': TannerConfig.get('EMULATOR_ENABLED', 'crlf'),
             'xxe_injection': TannerConfig.get('EMULATOR_ENABLED', 'xxe_injection'),
-            'template_injection': TannerConfig.get('EMULATOR_ENABLED', 'template_injection'),
-            'twig_template_injection': TannerConfig.get('EMULATOR_ENABLED', 'twig_template_injection')
+            'template_injection': TannerConfig.get('EMULATOR_ENABLED', 'template_injection')
             }
 
         self.emulators = {
@@ -40,26 +39,27 @@ class BaseHandler:
             'crlf': crlf.CRLFEmulator() if self.emulator_enabled['crlf'] else None,
             'xxe_injection': xxe_injection.XXEInjection(loop) if self.emulator_enabled['xxe_injection'] else None,
             'template_injection': template_injection.TemplateInjection(loop) if
-            self.emulator_enabled['template_injection'] else None,
-            'twig_template_injection': twig_template_injection.TwigTemplateInjection(loop) if
-            self.emulator_enabled['twig_template_injection'] else None
+            self.emulator_enabled['template_injection'] else None
         }
 
         self.get_emulators = ['sqli', 'rfi', 'lfi', 'xss', 'php_code_injection', 'php_object_injection',
-                              'cmd_exec', 'crlf', 'xxe_injection', 'template_injection', 'twig_template_injection']
+                              'cmd_exec', 'crlf', 'xxe_injection', 'template_injection']
         self.post_emulators = ['sqli', 'rfi', 'lfi', 'xss', 'php_code_injection', 'php_object_injection',
-                               'cmd_exec', 'crlf', 'xxe_injection', 'template_injection', 'twig_template_injection']
+                               'cmd_exec', 'crlf', 'xxe_injection', 'template_injection']
         self.cookie_emulators = ['sqli', 'php_object_injection']
 
     def extract_get_data(self, path):
         """
         Return all the GET parameter
         :param path (str): The URL path from which GET parameters are to be extracted
-        :return: A dict containg name and value of parameters
+        :return: A MultiDictProxy object containg name and value of parameters
         """
-        path = urlparse(path)
-        queries = parse_qsl(unquote(path.query))
-        return dict(queries)
+        path = urllib.parse.unquote(path)
+        encodings = [('&&', '%26%26'), (';', '%3B')]
+        for value, encoded_value in encodings:
+            path = path.replace(value, encoded_value)
+        get_data = yarl.URL(path).query
+        return get_data
 
     async def get_emulation_result(self, session, data, target_emulators):
         """

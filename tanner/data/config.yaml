@@ -40,8 +40,7 @@ EMULATOR_ENABLED:
   lfi: True 
   xss: True
   cmd_exec: True
-  php_code_injection: True
-  twig_template_injection: True
+  php_code_injection: True 
   php_object_injection: True
   crlf: True
   xxe_injection: True
@@ -50,18 +49,9 @@ EMULATOR_ENABLED:
 SQLI: 
   type: SQLITE
   db_name: tanner_db
-  host: 127.0.0.1
+  host: localhost
   user: root
   password: user_pass
-
-POSTGRES:
-  db_name: tanner
-  host: localhost
-  port: 5432
-  user: user_name
-  password: user_password
-  poolsize: 80
-  timeout: 1
 
 XXE_INJECTION: 
   OUT_OF_BAND: False
@@ -100,8 +90,3 @@ REMOTE_DOCKERFILE:
 
 SESSIONS: 
   delete_timeout: 300
-  analyze_timeout: 300
-
-TWIG_PATH:
-  autoloader: "path/of/Autoloader.php"
-  stringloader: "path/of/StringLoader.php"
