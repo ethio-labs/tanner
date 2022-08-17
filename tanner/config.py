@@ -34,6 +34,7 @@ class TannerConfig():
     @staticmethod
     def get(section, value):
         try:
+            print(TannerConfig.config)
             res = TannerConfig.config[section][value]
         except (KeyError, TypeError):
             res = DEFAULT_CONFIG[section][value]
