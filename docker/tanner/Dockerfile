@@ -15,6 +15,10 @@ RUN apk -U --no-cache add \
                python3 \
                python3-dev \
                py3-pip && \
+               postgresql-dev \
+               gcc \
+               musl-dev \
+               python3-dev && \
 # Setup Tanner
     git clone -b add-psql --depth=1 https://github.com/JohnBonJo/tanner /opt/tanner && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data/ && \
