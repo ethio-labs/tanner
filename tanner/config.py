@@ -20,7 +20,6 @@ class TannerConfig():
         except yaml.parser.ParserError as e:
             print("Couldn't properly parse the config file. Please use properly formatted YAML config.")
             sys.exit(1)
-        print(config_values)
         return config_values
 
     @staticmethod
@@ -34,8 +33,8 @@ class TannerConfig():
 
     @staticmethod
     def get(section, value):
-        print(section, value)
         try:
+            print(TannerConfig.config)
             res = TannerConfig.config[section][value]
         except (KeyError, TypeError):
             res = DEFAULT_CONFIG[section][value]
