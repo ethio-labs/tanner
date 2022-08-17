@@ -10,4 +10,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 
 # Start redis
 USER nobody:nobody
-CMD start postgres
+CMD ["postgres"]
