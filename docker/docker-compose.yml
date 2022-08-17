@@ -16,6 +16,9 @@ services:
      - tanner_local
     image: "mushorg/postgres:latest"
     read_only: true
+    environment:
+      POSTGRES_DB: "db"
+      POSTGRES_HOST_AUTH_METHOD: "trust"
 
 # Tanner Redis Service
   tanner_redis:
