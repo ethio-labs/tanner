@@ -5,6 +5,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 import geoip2
 import aioredis
+import psycopg2
 from tanner.sessions.session_analyzer import SessionAnalyzer
 
 
@@ -44,7 +45,10 @@ class TestSessionAnalyzer(unittest.TestCase):
         geoip2.database.Reader.__init__ = Mock(return_value=None)
         rvalue = geoip2.models.City(
             {
-                "city": {"geoname_id": 4223379, "names": {"en": "Smyrna", "ru": "Смирна", "zh-CN": "士麦那"}},
+                "city": {
+                    "geoname_id": 4223379,
+                    "names": {"en": "Smyrna", "ru": "Смирна", "zh-CN": "士麦那"},
+                },
                 "continent": {
                     "code": "NA",
                     "geoname_id": 6255149,
@@ -114,17 +118,29 @@ class TestSessionAnalyzer(unittest.TestCase):
             },
             ["en"],
         )
+        self.failValue = geoip2.models.City(
+            {
+                "city": {"name": None},
+                "continent": {"code": None},
+                "country": {"name": None, "iso_code": None},
+                "location": {"postal": {"code": 0}},
+                "traits": {"ip_address": "0.0.0.0"},
+            },
+            ["en"],
+        )
         geoip2.database.Reader.city = Mock(return_value=rvalue)
 
     def tests_load_session_fail(self):
         async def sess_get(key):
-            return aioredis.ProtocolError
+            return aioredis.ProtocolError, psycopg2.OperationalError
 
         redis_mock = Mock()
         redis_mock.get = sess_get
+        pg_mock = Mock()
+        pg_mock.get = sess_get
         res = None
         with self.assertLogs():
-            self.loop.run_until_complete(self.handler.analyze(None, redis_mock))
+            self.loop.run_until_complete(self.handler.analyze(redis_mock, pg_mock))
 
     def test_create_stats(self):
         async def sess_get():
@@ -141,12 +157,21 @@ class TestSessionAnalyzer(unittest.TestCase):
         redis_mock.smembers = set_of_members
         redis_mock.zadd = set_add
         with patch("builtins.open", new_callable=mock_open) as m:
-            stats = self.loop.run_until_complete(self.handler.create_stats(self.session, redis_mock))
+            stats = self.loop.run_until_complete(
+                self.handler.create_stats(self.session, redis_mock)
+            )
         self.assertEqual(stats["possible_owners"], {"attacker": 1.0})
 
     def test_choose_owner_crawler(self):
         stats = dict(
-            paths=[{"path": "/robots.txt", "timestamp": 1.0, "response_status": 200, "attack_type": "index"}],
+            paths=[
+                {
+                    "path": "/robots.txt",
+                    "timestamp": 1.0,
+                    "response_status": 200,
+                    "attack_type": "index",
+                }
+            ],
             attack_types={"index"},
             requests_in_second=11.1,
             referer=None,
@@ -162,7 +187,14 @@ class TestSessionAnalyzer(unittest.TestCase):
 
     def test_choose_owner_attacker(self):
         stats = dict(
-            paths=[{"path": "/", "timestamp": 1.0, "response_status": 200, "attack_type": "rfi"}],
+            paths=[
+                {
+                    "path": "/",
+                    "timestamp": 1.0,
+                    "response_status": 200,
+                    "attack_type": "rfi",
+                }
+            ],
             attack_types={"rfi", "lfi"},
             requests_in_second=2,
             user_agent="user",
@@ -178,7 +210,14 @@ class TestSessionAnalyzer(unittest.TestCase):
 
     def test_choose_owner_mixed(self):
         stats = dict(
-            paths=[{"path": "/", "timestamp": 1.0, "response_status": 200, "attack_type": ""}],
+            paths=[
+                {
+                    "path": "/",
+                    "timestamp": 1.0,
+                    "response_status": 200,
+                    "attack_type": "",
+                }
+            ],
             attack_types="",
             requests_in_second=2,
             user_agent="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
@@ -192,11 +231,21 @@ class TestSessionAnalyzer(unittest.TestCase):
 
         with patch("builtins.open", new_callable=mock_open) as m:
             self.loop.run_until_complete(test())
-        self.assertEqual(self.res["possible_owners"], {"attacker": 0.75, "crawler": 0.25, "tool": 0.15, "user": 0.25})
+        self.assertEqual(
+            self.res["possible_owners"],
+            {"attacker": 0.75, "crawler": 0.25, "tool": 0.15, "user": 0.25},
+        )
 
     def test_choose_owner_user(self):
         stats = dict(
-            paths=[{"path": "/", "timestamp": 1.0, "response_status": 200, "attack_type": ""}],
+            paths=[
+                {
+                    "path": "/",
+                    "timestamp": 1.0,
+                    "response_status": 200,
+                    "attack_type": "",
+                }
+            ],
             attack_types="",
             requests_in_second=2,
             user_agent="test_user_agent",
@@ -219,5 +268,16 @@ class TestSessionAnalyzer(unittest.TestCase):
             country_code="US",
             city="Smyrna",
             zip_code="30080",
+        )
+        self.assertEqual(location_stats, expected_res)
+
+    def test_find_location_exception(self):
+        geoip2.database.Reader.city = Mock(return_value=self.failValue)
+        location_stats = self.handler.find_location("0.0.0.0")
+        expected_res = dict(
+            country=None,
+            country_code=None,
+            city=None,
+            zip_code="NA",
         )
         self.assertEqual(location_stats, expected_res)
