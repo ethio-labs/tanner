@@ -6,6 +6,8 @@ mimesis<3.0.0
 yarl
 redis
 aioredis
+aiopg
+uvloop
 pymongo
 pylibinjection
 jinja2

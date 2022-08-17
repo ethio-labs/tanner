@@ -5,7 +5,7 @@ import yarl
 
 from aiohttp import web
 
-from tanner import dorks_manager, redis_client
+from tanner import dorks_manager, redis_client, postgres_client, dbutils
 from tanner.sessions import session_manager
 from tanner.config import TannerConfig
 from tanner.emulators import base
@@ -26,6 +26,7 @@ class TannerServer:
         self.base_handler = base.BaseHandler(base_dir, db_name)
         self.logger = logging.getLogger(__name__)
         self.redis_client = None
+        self.pg_client = None
 
         if TannerConfig.get("HPFEEDS", "enabled") is True:
             self.hpf = hpfeeds_report()
@@ -91,14 +92,16 @@ class TannerServer:
         return web.json_response(response_msg)
 
     async def on_shutdown(self, app):
-        await self.session_manager.delete_sessions_on_shutdown(self.redis_client)
+        await self.session_manager.delete_sessions_on_shutdown(self.redis_client, self.pg_client)
         self.redis_client.close()
         await self.redis_client.wait_closed()
+        self.pg_client.close()
+        await self.pg_client.wait_closed()
 
     async def delete_sessions(self):
         try:
             while True:
-                await self.session_manager.delete_old_sessions(self.redis_client)
+                await self.session_manager.delete_old_sessions(self.redis_client, self.pg_client)
                 await asyncio.sleep(self.delete_timeout)
         except asyncio.CancelledError:
             pass
@@ -126,9 +129,19 @@ class TannerServer:
 
     def start(self):
         loop = asyncio.get_event_loop()
-        self.redis_client = loop.run_until_complete(redis_client.RedisClient.get_redis_client())
+        self.redis_client = loop.run_until_complete(
+            redis_client.RedisClient.get_redis_client()
+        )
+        self.pg_client = loop.run_until_complete(
+            postgres_client.PostgresClient().get_pg_client()
+        )
+        loop.run_until_complete(
+            dbutils.DBUtils.create_data_tables(self.pg_client)
+        )
 
         host = TannerConfig.get("TANNER", "host")
         port = TannerConfig.get("TANNER", "port")
 
-        web.run_app(self.make_app(), host=host, port=port)
+        host = TannerConfig.get("TANNER", "host")
+        port = TannerConfig.get("TANNER", "port")
+        web.run_app(app, host=host, port=int(port))
