@@ -2,7 +2,7 @@ import asyncio
 import logging
 import aiohttp_jinja2
 import jinja2
-from collections import defaultdict
+
 from aiohttp import web
 from tanner.api import api
 from tanner import postgres_client
@@ -14,7 +14,7 @@ class TannerWebServer:
     def __init__(self):
         self.logger = logging.getLogger('tanner.web.tannerwebserver')
         self.api = None
-        self.pg_client = None
+        self.redis_client = None
 
     @aiohttp_jinja2.template('index.html')
     async def handle_index(self, request):
@@ -54,14 +54,15 @@ class TannerWebServer:
         snare_uuid = request.match_info['snare_uuid']
         page_id = int(request.match_info['page_id'])
         params = request.url.query
-        applied_filters = defaultdict(list)
-        applied_filters["sensor_id"].append(snare_uuid)
+        applied_filters = {'sensor_id': snare_uuid}
         try:
             if 'filters' in params:
                 for filt in params['filters'].split():
-                    key, value = filt.split(':', 1)
-                    applied_filters[key].append(value)
-            print(applied_filters)
+                    applied_filters[filt.split(':', 1)[0]] = filt.split(':', 1)[1]
+                if 'start_time' in applied_filters:
+                    applied_filters['start_time'] = applied_filters['start_time']
+                if 'end_time' in applied_filters:
+                    applied_filters['end_time'] = applied_filters['end_time']
         except Exception as e:
             self.logger.exception('Filter error : %s' % e)
             result = 'Invalid filter definition'
@@ -103,8 +104,7 @@ class TannerWebServer:
         }
 
     async def on_shutdown(self, app):
-        self.pg_client.close()
-        await self.pg_client.wait_closed()
+        self.redis_client.close()
 
     def setup_routes(self, app):
         app.router.add_get('/', self.handle_index)
@@ -116,7 +116,7 @@ class TannerWebServer:
         app.router.add_static('/static/', path='tanner/web/static')
 
     def create_app(self, loop):
-        app = web.Application()
+        app = web.Application(loop=loop)
         aiohttp_jinja2.setup(app,
                              loader=jinja2.FileSystemLoader('tanner/web/templates'))
         app.on_shutdown.append(self.on_shutdown)
