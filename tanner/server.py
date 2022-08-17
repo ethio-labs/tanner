@@ -1,10 +1,8 @@
 import asyncio
 import json
 import logging
-import concurrent
-
-import uvloop
 import yarl
+
 from aiohttp import web
 
 from tanner import dorks_manager, redis_client, postgres_client, dbutils
@@ -15,9 +13,6 @@ from tanner.reporting.log_local import Reporting as local_report
 from tanner.reporting.log_mongodb import Reporting as mongo_report
 from tanner.reporting.log_hpfeeds import Reporting as hpfeeds_report
 from tanner import __version__ as tanner_version
-
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
 
 class TannerServer:
     def __init__(self):
@@ -38,9 +33,7 @@ class TannerServer:
             self.hpf.connect()
 
             if self.hpf.connected() is False:
-                self.logger.warning(
-                    "hpfeeds not connected - no hpfeeds messages will be created"
-                )
+                self.logger.warning("hpfeeds not connected - no hpfeeds messages will be created")
 
     @staticmethod
     def _make_response(msg):
@@ -60,17 +53,13 @@ class TannerServer:
             self.logger.exception("error parsing request: %s", data)
             response_msg = self._make_response(msg=type(error).__name__)
         else:
-            session, _ = await self.session_manager.add_or_update_session(
-                data, self.redis_client
-            )
+            session, _ = await self.session_manager.add_or_update_session(data, self.redis_client)
             self.logger.info("Requested path %s", path)
             await self.dorks.extract_path(path, self.redis_client)
             detection = await self.base_handler.handle(data, session)
             session.set_attack_type(path, detection["name"])
 
-            response_msg = self._make_response(
-                msg=dict(detection=detection, sess_uuid=session.get_uuid())
-            )
+            response_msg = self._make_response(msg=dict(detection=detection, sess_uuid=session.get_uuid()))
             self.logger.info("TANNER response %s", response_msg)
 
             session_data = data
@@ -123,10 +112,12 @@ class TannerServer:
         app.router.add_get("/dorks", self.handle_dorks)
         app.router.add_get("/version", self.handle_version)
 
-    def create_app(self, loop):
-        app = web.Application(loop=loop)
+    async def make_app(self):
+        app = web.Application()
         app.on_shutdown.append(self.on_shutdown)
         self.setup_routes(app)
+        app.on_startup.append(self.start_background_delete)
+        app.on_cleanup.append(self.cleanup_background_tasks)
         return app
 
     async def start_background_delete(self, app):
@@ -148,9 +139,8 @@ class TannerServer:
             dbutils.DBUtils.create_data_tables(self.pg_client)
         )
 
-        app = self.create_app(loop)
-        app.on_startup.append(self.start_background_delete)
-        app.on_cleanup.append(self.cleanup_background_tasks)
+        host = TannerConfig.get("TANNER", "host")
+        port = TannerConfig.get("TANNER", "port")
 
         host = TannerConfig.get("TANNER", "host")
         port = TannerConfig.get("TANNER", "port")

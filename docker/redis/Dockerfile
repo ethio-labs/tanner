@@ -1,11 +1,10 @@
-FROM redis:alpine
+FROM redis:6.2.7-alpine
 
 # Include dist
 ADD dist/ /root/dist/
 
 # Setup apt
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add redis && \ 
+RUN apk -U --no-cache add redis && \ 
     cp /root/dist/redis.conf /etc && \
 # Clean up
     rm -rf /root/* && \

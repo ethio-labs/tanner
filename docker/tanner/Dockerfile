@@ -1,11 +1,10 @@
-FROM alpine:3.10
+FROM alpine:3.15
 
 # Include dist
 ADD dist/ /root/dist/
 
 # Setup apt
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
                build-base \
                git \
                libcap \
@@ -14,12 +13,16 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                linux-headers \
                py3-yarl \
                python3 \
-               python3-dev && \
+               python3-dev \
+               py3-pip && \
 # Setup Tanner
-    git clone --depth=1 https://github.com/mushorg/tanner -b develop /opt/tanner && \
+    git clone --depth=1 https://github.com/miketorreno/tanner /opt/tanner && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data/ && \
     cd /opt/tanner/ && \
-    pip3 install --no-cache-dir setuptools && \
+    python3 -m venv tanner-env && \
+    source /opt/tanner/tanner-env/bin/activate && \
+    pip install --upgrade pip && \
+    pip3 install --no-cache-dir wheel && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \
     cd / && \
@@ -37,4 +40,5 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Start tanner
 USER nobody:nobody
 WORKDIR /opt/tanner
-CMD tanner --config /opt/tanner/tanner/data/config.yaml
+CMD ["/opt/tanner/tanner-env/bin/tanner", "--config", "/opt/tanner/tanner/data/config.yaml"]
+
