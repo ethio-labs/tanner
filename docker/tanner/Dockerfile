@@ -14,11 +14,10 @@ RUN apk -U --no-cache add \
                py3-yarl \
                python3 \
                python3-dev \
-               py3-pip && \
+               py3-pip \
                postgresql-dev \
                gcc \
-               musl-dev \
-               python3-dev && \
+               musl-dev && \
 # Setup Tanner
     git clone -b add-psql --depth=1 https://github.com/JohnBonJo/tanner /opt/tanner && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data/ && \
@@ -45,4 +44,3 @@ RUN apk -U --no-cache add \
 USER nobody:nobody
 WORKDIR /opt/tanner
 CMD ["/opt/tanner/tanner-env/bin/tanner", "--config", "/opt/tanner/tanner/data/config.yaml"]
-
